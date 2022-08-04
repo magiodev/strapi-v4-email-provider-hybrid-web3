@@ -33,7 +33,7 @@ using the new one (A to B) and start again freshly.
 
 ## Email confirmation
 
-User will be created as not confirmed without email. When a user update his account filling email field
+User will be created as not confirmed without email. When a user update his account filling email we follow the standard confirmation workflow.
 
 <hr/>
 
