@@ -12,7 +12,7 @@ const {getService} = require('@strapi/plugin-users-permissions/server/utils');
 const {validateCreateUserBody, validateUpdateUserBody} = require('./validation/user');
 
 const {sanitize} = utils;
-const {ApplicationError, ValidationError, NotFoundError} = utils.errors;
+const {ApplicationError, NotFoundError} = utils.errors;
 
 const sanitizeOutput = (user, ctx) => {
   const schema = strapi.getModel('plugin::users-permissions.user');
@@ -22,6 +22,65 @@ const sanitizeOutput = (user, ctx) => {
 };
 
 module.exports = {
+  // OVERRIDES
+
+  /**
+   * Update a/an user record.
+   * @return {Object}
+   */
+  async update(ctx) {
+    const userId = ctx.params.id
+
+    if (!userId)
+      return ctx.badRequest("You should pass the user ID to update")
+
+    let userToUpdate = await strapi.query('plugin::users-permissions.user').findOne({where: { id: userId }});
+
+    if (ctx.state.user.id !== userToUpdate.id)
+      return ctx.badRequest("You're not allowed to perform this action")
+
+    const advancedConfigs = await strapi
+      .store({type: 'plugin', name: 'users-permissions', key: 'advanced'})
+      .get();
+
+    const {id} = ctx.params;
+    const {email} = ctx.request.body;
+
+    const user = await getService('user').fetch(id);
+    if (!user) {
+      throw new NotFoundError(`User not found`);
+    }
+
+    await validateUpdateUserBody(ctx.request.body);
+
+    if (_.has(ctx.request.body, 'email') && advancedConfigs.unique_email) {
+      const userWithSameEmail = await strapi
+        .query('plugin::users-permissions.user')
+        .findOne({where: {email: email.toLowerCase()}});
+
+      if (userWithSameEmail && userWithSameEmail.id !== id) {
+        throw new ApplicationError('Email already taken');
+      }
+    }
+
+    const userEdit = await getService('user').edit(user.id, {
+      email: email.toLowerCase(),
+      confirmed: false // setting as false
+    });
+    const sanitizedData = await sanitizeOutput(userEdit, ctx);
+
+    // sending email
+    try {
+      await getService('user').sendConfirmationEmail(userEdit);
+    } catch (err) {
+      throw new ApplicationError(err.message);
+    }
+
+    ctx.send(sanitizedData);
+  },
+
+  // DEFAULTS
+
   /**
    * Create a/an user record.
    * @return {Object}
@@ -33,7 +92,7 @@ module.exports = {
 
     await validateCreateUserBody(ctx.request.body);
 
-    const {email} = ctx.request.body;
+    const {email, role} = ctx.request.body;
 
     if (advanced.unique_email) {
       const userWithSameEmail = await strapi
@@ -68,52 +127,6 @@ module.exports = {
     } catch (error) {
       throw new ApplicationError(error.message);
     }
-  },
-
-  /**
-   * Update a/an user record.
-   * @return {Object}
-   */
-  async update(ctx) {
-    const advancedConfigs = await strapi
-      .store({type: 'plugin', name: 'users-permissions', key: 'advanced'})
-      .get();
-
-    const {id} = ctx.params;
-    const {email} = ctx.request.body;
-
-    const user = await getService('user').fetch(id);
-    if (!user) {
-      throw new NotFoundError(`User not found`);
-    }
-
-    await validateUpdateUserBody(ctx.request.body);
-
-    if (_.has(ctx.request.body, 'email') && advancedConfigs.unique_email) {
-      const userWithSameEmail = await strapi
-        .query('plugin::users-permissions.user')
-        .findOne({where: {email: email.toLowerCase()}});
-
-      if (userWithSameEmail && userWithSameEmail.id !== id) {
-        throw new ApplicationError('Email already taken');
-      }
-      ctx.request.body.email = ctx.request.body.email.toLowerCase();
-    }
-
-    let updateData = {
-      ...ctx.request.body,
-    };
-
-    const userEdit = await getService('user').edit(user.id, updateData);
-    const sanitizedData = await sanitizeOutput(userEdit, ctx);
-
-    try {
-      await getService('user').sendConfirmationEmail(userEdit);
-    } catch (err) {
-      throw new ApplicationError(err.message);
-    }
-
-    ctx.send(sanitizedData);
   },
 
   /**
@@ -176,5 +189,5 @@ module.exports = {
     }
 
     ctx.body = await sanitizeOutput(user, ctx);
-  },
+  }
 };
