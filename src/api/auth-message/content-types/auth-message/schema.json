@@ -1,0 +1,26 @@
+{
+  "kind": "collectionType",
+  "collectionName": "auth_messages",
+  "info": {
+    "singularName": "auth-message",
+    "pluralName": "auth-messages",
+    "displayName": "AuthMessage",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "message": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "valid": {
+      "type": "boolean",
+      "default": true,
+      "required": false
+    }
+  }
+}
