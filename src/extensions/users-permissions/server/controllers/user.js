@@ -29,6 +29,7 @@ module.exports = {
    * @return {Object}
    */
   async update(ctx) {
+    if(!ctx.state.user) return ctx.badRequest("Authentication needed")
     const userId = ctx.params.id
 
     if (!userId)
@@ -189,5 +190,5 @@ module.exports = {
     }
 
     ctx.body = await sanitizeOutput(user, ctx);
-  }
+  },
 };
